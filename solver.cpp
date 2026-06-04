@@ -69,8 +69,8 @@ double parse_double(const char* value, const std::string& name) {
 int parse_int(const char* value, const std::string& name) {
     char* end = nullptr;
     const long parsed = std::strtol(value, &end, 10);
-    if (end == value || *end != '\0' || parsed < 2 || parsed > 20000) {
-        fail("Invalid " + name + ": expected integer in [2, 20000]");
+    if (end == value || *end != '\0' || parsed < 2 || parsed > 2000000) {
+        fail("Invalid " + name + ": expected integer in [2, 2000000]");
     }
     return static_cast<int>(parsed);
 }
@@ -224,6 +224,33 @@ std::vector<double> solve_numerically(int n, double theta, double gamma) {
     return values;
 }
 
+
+std::vector<int> sampled_indices(int n) {
+    constexpr int FULL_OUTPUT_LIMIT = 2000;
+    constexpr int EDGE_COUNT = 10;
+    constexpr int MIDDLE_SAMPLE_COUNT = 1000;
+
+    std::vector<int> indices;
+    if (n <= FULL_OUTPUT_LIMIT) {
+        indices.reserve(n + 1);
+        for (int i = 0; i <= n; ++i) indices.push_back(i);
+        return indices;
+    }
+
+    indices.reserve(EDGE_COUNT * 2 + MIDDLE_SAMPLE_COUNT);
+    for (int i = 0; i < EDGE_COUNT; ++i) indices.push_back(i);
+
+    for (int j = 1; j <= MIDDLE_SAMPLE_COUNT; ++j) {
+        const int idx = static_cast<int>(std::llround(static_cast<double>(j) * n / (MIDDLE_SAMPLE_COUNT + 1)));
+        if (idx >= EDGE_COUNT && idx <= n - EDGE_COUNT) indices.push_back(idx);
+    }
+
+    for (int i = std::max(EDGE_COUNT, n - EDGE_COUNT + 1); i <= n; ++i) indices.push_back(i);
+    std::sort(indices.begin(), indices.end());
+    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+    return indices;
+}
+
 void write_json_number(std::ostream& os, double value) {
     if (std::isfinite(value)) {
         os << std::setprecision(17) << value;
@@ -247,8 +274,6 @@ int main(int argc, char** argv) {
         const auto constants = analytic_constants();
         const auto numerical = solve_numerically(n, theta, gamma);
 
-        std::vector<Row> rows;
-        rows.reserve(n + 1);
         double epsilon1 = -1.0;
         double max_x = 0.0;
         for (int i = 0; i <= n; ++i) {
@@ -260,7 +285,15 @@ int main(int argc, char** argv) {
                 epsilon1 = abs_diff;
                 max_x = x;
             }
-            rows.push_back({i, x, u, numerical[i], diff});
+        }
+
+        const auto indices = sampled_indices(n);
+        std::vector<Row> rows;
+        rows.reserve(indices.size());
+        for (int i : indices) {
+            const double x = i * h;
+            const double u = analytic_value(x, constants);
+            rows.push_back({i, x, u, numerical[i], u - numerical[i]});
         }
 
         std::ostringstream out;
@@ -270,6 +303,9 @@ int main(int argc, char** argv) {
         out << ",\"epsilon_target\":"; write_json_number(out, epsilon_target);
         out << ",\"epsilon1\":"; write_json_number(out, epsilon1);
         out << ",\"max_x\":"; write_json_number(out, max_x);
+        out << ",\"total_points\":" << (n + 1);
+        out << ",\"sampled_points\":" << rows.size();
+        out << ",\"is_sampled\":" << (rows.size() == static_cast<std::size_t>(n + 1) ? "false" : "true");
         out << ",\"constants\":{\"A\":"; write_json_number(out, constants.A);
         out << ",\"B\":"; write_json_number(out, constants.B);
         out << ",\"C\":"; write_json_number(out, constants.C);

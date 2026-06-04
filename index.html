@@ -41,7 +41,7 @@
     <section class="card">
       <form id="solve-form">
         <label>Число разбиений n
-          <input id="n" name="n" type="number" min="2" max="20000" step="1" value="100" required />
+          <input id="n" name="n" type="number" min="2" max="2000000" step="1" value="100" required />
         </label>
         <label>θ (тета)
           <input id="theta" name="theta" type="number" min="0" max="1" step="0.01" value="0.5" required />
@@ -75,6 +75,7 @@
 
     <section class="card" id="table-card" hidden>
       <h2>Таблица 2</h2>
+      <p id="table-note" class="hint"></p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -100,6 +101,7 @@
     const charts = document.getElementById('charts');
     const tableCard = document.getElementById('table-card');
     const tableBody = document.getElementById('result-body');
+    const tableNote = document.getElementById('table-note');
 
     function fmt(value, digits = 10) {
       return Number(value).toExponential ? Number(value).toExponential(digits) : value;
@@ -120,12 +122,20 @@
       const margin = { left: 72, right: 24, top: 28, bottom: 58 };
       const plotW = width - margin.left - margin.right;
       const plotH = height - margin.top - margin.bottom;
-      const xs = series.flatMap(s => s.points.map(p => p.x));
-      const ys = series.flatMap(s => s.points.map(p => p.y));
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      let minY = Math.min(...ys);
-      let maxY = Math.max(...ys);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      series.forEach(s => {
+        s.points.forEach(p => {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
+      });
+      if (!Number.isFinite(minX) || !Number.isFinite(maxX) || minX === maxX) { minX = 0; maxX = 1; }
+      if (!Number.isFinite(minY) || !Number.isFinite(maxY)) { minY = -1; maxY = 1; }
       if (Math.abs(maxY - minY) < 1e-14) { maxY += 1; minY -= 1; }
       const padY = 0.08 * (maxY - minY);
       minY -= padY;
@@ -207,14 +217,25 @@
         { label: 'u(x) − v(x)', color: '#7c3aed', points: data.points.map(p => ({ x: p.x, y: p.diff })) }
       ], 'погрешность');
 
-      tableBody.innerHTML = data.points.map(p => `
-        <tr>
-          <td>${p.i}</td>
-          <td>${niceNumber(p.x)}</td>
-          <td>${fmt(p.u, 10)}</td>
-          <td>${fmt(p.v, 10)}</td>
-          <td>${fmt(p.diff, 10)}</td>
-        </tr>`).join('');
+      tableNote.textContent = data.is_sampled
+        ? `Показано ${data.sampled_points} строк из ${data.total_points}: первые узлы, равномерная выборка по интервалу и последние 10 узлов подряд.`
+        : `Показаны все ${data.total_points} строк таблицы.`;
+      const rows = [];
+      data.points.forEach((p, index) => {
+        const prev = data.points[index - 1];
+        if (prev && p.i !== prev.i + 1) {
+          rows.push('<tr><td colspan="5" style="text-align:center;color:#64748b">…</td></tr>');
+        }
+        rows.push(`
+          <tr>
+            <td>${p.i}</td>
+            <td>${niceNumber(p.x)}</td>
+            <td>${fmt(p.u, 10)}</td>
+            <td>${fmt(p.v, 10)}</td>
+            <td>${fmt(p.diff, 10)}</td>
+          </tr>`);
+      });
+      tableBody.innerHTML = rows.join('');
     }
 
     function renderError(message) {

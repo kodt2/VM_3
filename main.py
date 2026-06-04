@@ -15,7 +15,7 @@ app = FastAPI(title="Mixed Boundary Test Problem Solver")
 
 @app.get("/api/solve")
 def solve(
-    n: int = Query(100, ge=2, le=20000),
+    n: int = Query(100, ge=2, le=2000000),
     theta: float = Query(0.5, ge=0.0, le=1.0),
     gamma: float = Query(0.5, ge=0.0, le=1.0),
     epsilon_target: float = Query(0.5e-6, gt=0.0),
@@ -29,7 +29,7 @@ def solve(
             check=False,
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=180,
         )
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(status_code=504, detail="C++ solver timed out") from exc
