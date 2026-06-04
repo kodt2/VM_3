@@ -18,13 +18,14 @@ def solve(
     n: int = Query(100, ge=2, le=20000),
     theta: float = Query(0.5, ge=0.0, le=1.0),
     gamma: float = Query(0.5, ge=0.0, le=1.0),
+    epsilon_target: float = Query(0.5e-6, gt=0.0),
 ):
     if not SOLVER_PATH.exists():
         raise HTTPException(status_code=500, detail="C++ solver executable was not found")
 
     try:
         completed = subprocess.run(
-            [str(SOLVER_PATH), str(n), str(theta), str(gamma)],
+            [str(SOLVER_PATH), str(n), str(theta), str(gamma), str(epsilon_target)],
             check=False,
             capture_output=True,
             text=True,

@@ -20,7 +20,6 @@ constexpr double F2 = 0.70710678118654752440;
 constexpr double MU1 = 1.0;
 constexpr double MU2 = 0.0;
 constexpr double BETA = 1.0;
-constexpr double TARGET_EPS = 0.5e-6;
 
 struct AnalyticConstants {
     double A{};
@@ -168,6 +167,13 @@ double clamp_unit(double value, const std::string& name) {
     return value;
 }
 
+double require_positive(double value, const std::string& name) {
+    if (value <= 0.0) {
+        fail(name + " must be positive");
+    }
+    return value;
+}
+
 std::vector<double> solve_numerically(int n, double theta, double gamma) {
     const double h = 1.0 / static_cast<double>(n);
     std::vector<double> lower(n + 1, 0.0), diag(n + 1, 0.0), upper(n + 1, 0.0), rhs(n + 1, 0.0);
@@ -228,14 +234,15 @@ void write_json_number(std::ostream& os, double value) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        fail("Usage: solver <n> <theta> <gamma>");
+    if (argc != 5) {
+        fail("Usage: solver <n> <theta> <gamma> <epsilon_target>");
     }
 
     try {
         const int n = parse_int(argv[1], "n");
         const double theta = clamp_unit(parse_double(argv[2], "theta"), "theta");
         const double gamma = clamp_unit(parse_double(argv[3], "gamma"), "gamma");
+        const double epsilon_target = require_positive(parse_double(argv[4], "epsilon_target"), "epsilon_target");
         const double h = 1.0 / static_cast<double>(n);
         const auto constants = analytic_constants();
         const auto numerical = solve_numerically(n, theta, gamma);
@@ -260,7 +267,7 @@ int main(int argc, char** argv) {
         out << "{\"n\":" << n
             << ",\"theta\":"; write_json_number(out, theta);
         out << ",\"gamma\":"; write_json_number(out, gamma);
-        out << ",\"epsilon_target\":"; write_json_number(out, TARGET_EPS);
+        out << ",\"epsilon_target\":"; write_json_number(out, epsilon_target);
         out << ",\"epsilon1\":"; write_json_number(out, epsilon1);
         out << ",\"max_x\":"; write_json_number(out, max_x);
         out << ",\"constants\":{\"A\":"; write_json_number(out, constants.A);

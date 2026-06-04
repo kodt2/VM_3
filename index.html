@@ -12,7 +12,7 @@
     header p { margin: 0; opacity: 0.92; max-width: 1000px; line-height: 1.5; }
     main { padding: 24px clamp(16px, 4vw, 48px) 48px; }
     .card { background: white; border: 1px solid #dfe6f3; border-radius: 18px; box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08); margin-bottom: 22px; padding: 22px; }
-    form { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 16px; align-items: end; }
+    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; align-items: end; }
     label { display: grid; gap: 7px; color: #42526e; font-weight: 650; }
     input { border: 1px solid #bdc8dc; border-radius: 12px; font: inherit; padding: 11px 12px; }
     button { border: 0; border-radius: 12px; background: #2563eb; color: white; cursor: pointer; font: inherit; font-weight: 750; padding: 12px 18px; }
@@ -48,6 +48,9 @@
         </label>
         <label>γ (гамма)
           <input id="gamma" name="gamma" type="number" min="0" max="1" step="0.01" value="0.5" required />
+        </label>
+        <label>ε, требуемая точность
+          <input id="epsilon_target" name="epsilon_target" type="number" min="1e-15" step="1e-7" value="5e-7" required />
         </label>
         <button id="submit" type="submit">Рассчитать</button>
       </form>
@@ -191,7 +194,7 @@
 
     function render(data) {
       resultText.classList.remove('error');
-      resultText.textContent = `для решения задачи использована равномерная сетка с числом разбиений n = ${data.n}; задача должна быть решена с погрешностью не более ε = 0.5⋅10^-6; задача решена с погрешностью ε1 = ${fmt(data.epsilon1, 8)}; максимальное отклонение аналитического и численного решений наблюдается в точке x = ${niceNumber(data.max_x)}`;
+      resultText.textContent = `для решения задачи использована равномерная сетка с числом разбиений n = ${data.n}; задача должна быть решена с погрешностью не более ε = ${fmt(data.epsilon_target, 8)}; задача решена с погрешностью ε1 = ${fmt(data.epsilon1, 8)}; максимальное отклонение аналитического и численного решений наблюдается в точке x = ${niceNumber(data.max_x)}`;
       resultCard.hidden = false;
       charts.hidden = false;
       tableCard.hidden = false;
