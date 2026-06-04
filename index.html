@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Смешанная краевая тестовая задача — вариант 5</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #f5f7fb; color: #172033; }
+    header { background: linear-gradient(135deg, #233876, #2563eb); color: white; padding: 28px clamp(16px, 4vw, 48px); }
+    header h1 { margin: 0 0 8px; font-size: clamp(24px, 3vw, 36px); }
+    header p { margin: 0; opacity: 0.92; max-width: 1000px; line-height: 1.5; }
+    main { padding: 24px clamp(16px, 4vw, 48px) 48px; }
+    .card { background: white; border: 1px solid #dfe6f3; border-radius: 18px; box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08); margin-bottom: 22px; padding: 22px; }
+    form { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 16px; align-items: end; }
+    label { display: grid; gap: 7px; color: #42526e; font-weight: 650; }
+    input { border: 1px solid #bdc8dc; border-radius: 12px; font: inherit; padding: 11px 12px; }
+    button { border: 0; border-radius: 12px; background: #2563eb; color: white; cursor: pointer; font: inherit; font-weight: 750; padding: 12px 18px; }
+    button:disabled { cursor: wait; opacity: 0.7; }
+    .hint { color: #64748b; font-size: 14px; margin-top: 12px; }
+    .result-text { border-left: 5px solid #2563eb; background: #eff6ff; border-radius: 12px; line-height: 1.65; padding: 16px 18px; }
+    .error { border-left-color: #dc2626; background: #fef2f2; color: #991b1b; }
+    .charts { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 20px; }
+    canvas { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; height: 360px; width: 100%; }
+    .table-wrap { max-height: 560px; overflow: auto; border: 1px solid #dfe6f3; border-radius: 14px; }
+    table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+    th, td { border-bottom: 1px solid #e5eaf4; padding: 9px 11px; text-align: right; white-space: nowrap; }
+    th { background: #f8fafc; color: #334155; position: sticky; top: 0; z-index: 1; }
+    th:first-child, td:first-child { text-align: center; }
+    h2 { margin-top: 0; }
+    @media (max-width: 900px) { form, .charts { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Численное решение смешанной краевой тестовой задачи</h1>
+    <p>Реализованы аналитическое решение и консервативная разностная схема Самарского с улучшенной аппроксимацией правого смешанного граничного условия для 5-го варианта.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <form id="solve-form">
+        <label>Число разбиений n
+          <input id="n" name="n" type="number" min="2" max="20000" step="1" value="100" required />
+        </label>
+        <label>θ (тета)
+          <input id="theta" name="theta" type="number" min="0" max="1" step="0.01" value="0.5" required />
+        </label>
+        <label>γ (гамма)
+          <input id="gamma" name="gamma" type="number" min="0" max="1" step="0.01" value="0.5" required />
+        </label>
+        <button id="submit" type="submit">Рассчитать</button>
+      </form>
+      <div class="hint">Правая граница аппроксимируется формулой второго порядка по полуокрестности узла x = 1.</div>
+    </section>
+
+    <section class="card" id="result-card" hidden>
+      <h2>Результаты расчёта</h2>
+      <div id="result-text" class="result-text"></div>
+    </section>
+
+    <section class="charts" id="charts" hidden>
+      <div class="card">
+        <h2>График 1: u(x) и v(x)</h2>
+        <canvas id="solution-chart" width="900" height="520"></canvas>
+      </div>
+      <div class="card">
+        <h2>График 2: u(x) − v(x)</h2>
+        <canvas id="error-chart" width="900" height="520"></canvas>
+      </div>
+    </section>
+
+    <section class="card" id="table-card" hidden>
+      <h2>Таблица 2</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>№ узла</th>
+              <th>x_i</th>
+              <th>u(x_i)</th>
+              <th>v(x_i)</th>
+              <th>u(x_i) - v(x_i)</th>
+            </tr>
+          </thead>
+          <tbody id="result-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('solve-form');
+    const submitButton = document.getElementById('submit');
+    const resultCard = document.getElementById('result-card');
+    const resultText = document.getElementById('result-text');
+    const charts = document.getElementById('charts');
+    const tableCard = document.getElementById('table-card');
+    const tableBody = document.getElementById('result-body');
+
+    function fmt(value, digits = 10) {
+      return Number(value).toExponential ? Number(value).toExponential(digits) : value;
+    }
+
+    function niceNumber(value) {
+      const abs = Math.abs(Number(value));
+      if (abs !== 0 && (abs < 1e-4 || abs >= 1e5)) return Number(value).toExponential(8);
+      return Number(value).toFixed(10).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    function drawChart(canvas, series, yLabel) {
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+
+      const margin = { left: 72, right: 24, top: 28, bottom: 58 };
+      const plotW = width - margin.left - margin.right;
+      const plotH = height - margin.top - margin.bottom;
+      const xs = series.flatMap(s => s.points.map(p => p.x));
+      const ys = series.flatMap(s => s.points.map(p => p.y));
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      let minY = Math.min(...ys);
+      let maxY = Math.max(...ys);
+      if (Math.abs(maxY - minY) < 1e-14) { maxY += 1; minY -= 1; }
+      const padY = 0.08 * (maxY - minY);
+      minY -= padY;
+      maxY += padY;
+
+      const sx = x => margin.left + (x - minX) / (maxX - minX) * plotW;
+      const sy = y => margin.top + (maxY - y) / (maxY - minY) * plotH;
+
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#475569';
+      ctx.font = '20px system-ui, sans-serif';
+      ctx.beginPath();
+      ctx.rect(margin.left, margin.top, plotW, plotH);
+      ctx.stroke();
+
+      for (let tick = 0; tick <= 5; tick++) {
+        const x = minX + (maxX - minX) * tick / 5;
+        const px = sx(x);
+        ctx.beginPath();
+        ctx.moveTo(px, margin.top + plotH);
+        ctx.lineTo(px, margin.top + plotH + 7);
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.fillText(x.toFixed(2), px, margin.top + plotH + 32);
+
+        const y = minY + (maxY - minY) * tick / 5;
+        const py = sy(y);
+        ctx.beginPath();
+        ctx.moveTo(margin.left - 7, py);
+        ctx.lineTo(margin.left, py);
+        ctx.stroke();
+        ctx.textAlign = 'right';
+        ctx.fillText(niceNumber(y), margin.left - 12, py + 7);
+      }
+
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'center';
+      ctx.fillText('x', margin.left + plotW / 2, height - 14);
+      ctx.save();
+      ctx.translate(22, margin.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(yLabel, 0, 0);
+      ctx.restore();
+
+      series.forEach((s, idx) => {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = idx === 0 ? 3 : 2.4;
+        ctx.beginPath();
+        s.points.forEach((p, i) => {
+          const px = sx(p.x);
+          const py = sy(p.y);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+
+        const lx = margin.left + 18 + idx * 190;
+        const ly = margin.top + 16;
+        ctx.fillStyle = s.color;
+        ctx.fillRect(lx, ly - 10, 28, 5);
+        ctx.fillStyle = '#172033';
+        ctx.textAlign = 'left';
+        ctx.fillText(s.label, lx + 38, ly);
+      });
+    }
+
+    function render(data) {
+      resultText.classList.remove('error');
+      resultText.textContent = `для решения задачи использована равномерная сетка с числом разбиений n = ${data.n}; задача должна быть решена с погрешностью не более ε = 0.5⋅10^-6; задача решена с погрешностью ε1 = ${fmt(data.epsilon1, 8)}; максимальное отклонение аналитического и численного решений наблюдается в точке x = ${niceNumber(data.max_x)}`;
+      resultCard.hidden = false;
+      charts.hidden = false;
+      tableCard.hidden = false;
+
+      drawChart(document.getElementById('solution-chart'), [
+        { label: 'u(x), аналитическое', color: '#2563eb', points: data.points.map(p => ({ x: p.x, y: p.u })) },
+        { label: 'v(x), численное', color: '#dc2626', points: data.points.map(p => ({ x: p.x, y: p.v })) }
+      ], 'u, v');
+      drawChart(document.getElementById('error-chart'), [
+        { label: 'u(x) − v(x)', color: '#7c3aed', points: data.points.map(p => ({ x: p.x, y: p.diff })) }
+      ], 'погрешность');
+
+      tableBody.innerHTML = data.points.map(p => `
+        <tr>
+          <td>${p.i}</td>
+          <td>${niceNumber(p.x)}</td>
+          <td>${fmt(p.u, 10)}</td>
+          <td>${fmt(p.v, 10)}</td>
+          <td>${fmt(p.diff, 10)}</td>
+        </tr>`).join('');
+    }
+
+    function renderError(message) {
+      resultCard.hidden = false;
+      resultText.classList.add('error');
+      resultText.textContent = message;
+      charts.hidden = true;
+      tableCard.hidden = true;
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      submitButton.disabled = true;
+      submitButton.textContent = 'Расчёт...';
+      const params = new URLSearchParams(new FormData(form));
+      try {
+        const response = await fetch(`/api/solve?${params.toString()}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || 'Ошибка расчёта');
+        render(payload);
+      } catch (error) {
+        renderError(error.message);
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Рассчитать';
+      }
+    });
+  </script>
+</body>
+</html>
